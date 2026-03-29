@@ -1,0 +1,996 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Job Site Weather Planner — Fabric Installation</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --safe: #22c55e;
+    --caution: #f59e0b;
+    --danger: #ef4444;
+    --bg: #0f172a;
+    --card: #1e293b;
+    --border: #334155;
+    --text: #f1f5f9;
+    --muted: #94a3b8;
+    --accent: #3b82f6;
+    --header-h: 68px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  /* ── HEADER ─────────────────────────────────────────────────────────────── */
+  header {
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    position: sticky;
+    top: 0;
+    z-index: 2000;
+    height: var(--header-h);
+  }
+  .header-logo {
+    height: 44px;
+    width: auto;
+    object-fit: contain;
+    border-radius: 4px;
+    flex-shrink: 0;
+  }
+  .header-logo-fallback {
+    font-size: 1.5rem;
+    flex-shrink: 0;
+    display: none;
+  }
+  .header-text { flex: 1; min-width: 0; }
+  .header-title {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .header-title span { color: var(--accent); }
+  .header-sub { font-size: 0.72rem; color: var(--muted); margin-top: 1px; }
+  .header-credit {
+    font-size: 0.7rem;
+    color: var(--muted);
+    text-align: right;
+    flex-shrink: 0;
+    line-height: 1.4;
+    display: none;
+  }
+  .header-credit strong { color: var(--accent); }
+  .header-actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+
+  /* ── LAYOUT ─────────────────────────────────────────────────────────────── */
+  .layout {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    height: calc(100vh - var(--header-h));
+    overflow: hidden;
+  }
+
+  /* ── SIDEBAR ────────────────────────────────────────────────────────────── */
+  .sidebar {
+    background: var(--card);
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    transition: transform .3s ease;
+  }
+  .sidebar h3 {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  .input-group { display: flex; flex-direction: column; gap: 6px; }
+  .input-row { display: flex; gap: 7px; }
+  input[type=number], input[type=text], input[type=search] {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 0.85rem;
+    width: 100%;
+    outline: none;
+  }
+  input[type=number]:focus, input[type=text]:focus, input[type=search]:focus {
+    border-color: var(--accent);
+  }
+  label { font-size: 0.78rem; color: var(--muted); }
+
+  .btn {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 14px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    width: 100%;
+    transition: opacity .15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  .btn:hover { opacity: .85; }
+  .btn.secondary { background: var(--border); color: var(--text); }
+  .btn.success { background: #16a34a; }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+
+  .btn-row { display: flex; gap: 7px; }
+  .btn-row .btn { flex: 1; }
+
+  .threshold-row { display: flex; align-items: center; gap: 10px; }
+  .threshold-row input[type=range] { flex: 1; accent-color: var(--accent); cursor: pointer; }
+  .threshold-val { font-size: 0.82rem; font-weight: 700; color: var(--accent); min-width: 58px; text-align: right; }
+
+  .legend { display: flex; flex-direction: column; gap: 5px; }
+  .legend-item { display: flex; align-items: center; gap: 8px; font-size: 0.78rem; color: var(--muted); }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+  #map { width: 100%; height: 200px; border-radius: 8px; border: 1px solid var(--border); }
+  .coords-display { font-size: 0.75rem; color: var(--muted); text-align: center; }
+  .coords-display span { color: var(--accent); font-weight: 600; }
+
+  /* Search results dropdown */
+  .search-wrap { position: relative; }
+  .search-results {
+    position: absolute;
+    top: 100%;
+    left: 0; right: 0;
+    background: #1e3a5f;
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    z-index: 9999;
+    max-height: 200px;
+    overflow-y: auto;
+    margin-top: 2px;
+    display: none;
+  }
+  .search-results.show { display: block; }
+  .search-result-item {
+    padding: 8px 10px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    border-bottom: 1px solid rgba(51,65,85,.5);
+    line-height: 1.3;
+  }
+  .search-result-item:last-child { border-bottom: none; }
+  .search-result-item:hover { background: rgba(59,130,246,.2); }
+  .search-result-item .sri-name { color: var(--text); font-weight: 600; }
+  .search-result-item .sri-detail { color: var(--muted); font-size: 0.72rem; margin-top: 1px; }
+  .searching-indicator { padding: 10px; text-align: center; color: var(--muted); font-size: .8rem; }
+
+  .divider { border: none; border-top: 1px solid var(--border); margin: 0; }
+
+  /* ── MAIN ───────────────────────────────────────────────────────────────── */
+  .main { overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+
+  .loading {
+    display: none; flex-direction: column; align-items: center;
+    justify-content: center; gap: 12px; padding: 60px 0; color: var(--muted);
+  }
+  .spinner {
+    width: 36px; height: 36px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .empty-state {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 12px; padding: 60px 20px;
+    color: var(--muted); text-align: center;
+  }
+  .empty-state .icon { font-size: 2.8rem; }
+  .empty-state p { max-width: 300px; line-height: 1.5; font-size: .9rem; }
+
+  /* ── WINDOWS ────────────────────────────────────────────────────────────── */
+  .windows-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+  .window-card {
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 10px; padding: 11px 13px; border-left: 3px solid var(--safe);
+  }
+  .window-card .wc-date { font-size: 0.72rem; color: var(--muted); }
+  .window-card .wc-time { font-size: 0.95rem; font-weight: 700; margin: 2px 0; }
+  .window-card .wc-wind { font-size: 0.78rem; color: var(--safe); }
+
+  /* ── DAY CARDS ──────────────────────────────────────────────────────────── */
+  .days-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; }
+  .day-card {
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 8px; display: flex;
+    flex-direction: column; gap: 5px; cursor: pointer;
+    transition: border-color .15s; text-align: center;
+  }
+  .day-card:hover { border-color: var(--accent); }
+  .day-card.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .day-card .dc-name { font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  .day-card .dc-date { font-size: 0.78rem; font-weight: 600; }
+  .day-card .dc-icon { font-size: 1.5rem; line-height: 1; }
+  .day-card .dc-badge {
+    font-size: 0.62rem; font-weight: 700; border-radius: 4px;
+    padding: 2px 5px; text-align: center;
+  }
+  .badge-go { background: rgba(34,197,94,.15); color: var(--safe); }
+  .badge-caution { background: rgba(245,158,11,.15); color: var(--caution); }
+  .badge-nogo { background: rgba(239,68,68,.15); color: var(--danger); }
+  .dc-wind-max { font-size: 0.7rem; color: var(--muted); }
+  .dc-precip { font-size: 0.7rem; color: #60a5fa; }
+
+  /* ── CHART ──────────────────────────────────────────────────────────────── */
+  .chart-section {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px;
+  }
+  .chart-section h2 { font-size: 0.9rem; font-weight: 600; margin-bottom: 14px; }
+  .chart-wrap { position: relative; height: 260px; }
+
+  /* ── HOURLY TABLE ───────────────────────────────────────────────────────── */
+  .hourly-section {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px;
+  }
+  .hourly-section h2 { font-size: 0.9rem; font-weight: 600; margin-bottom: 10px; }
+  .hourly-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+  .hourly-table th {
+    text-align: left; padding: 6px 8px; color: var(--muted);
+    font-weight: 500; border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  .hourly-table td { padding: 5px 8px; border-bottom: 1px solid rgba(51,65,85,.5); white-space: nowrap; }
+  .hourly-table tr:last-child td { border-bottom: none; }
+  .hourly-table tr:hover td { background: rgba(59,130,246,.05); }
+  .wind-safe { color: var(--safe); font-weight: 600; }
+  .wind-caution { color: var(--caution); font-weight: 600; }
+  .wind-danger { color: var(--danger); font-weight: 600; }
+  .row-danger { background: rgba(239,68,68,.05); }
+  .row-caution { background: rgba(245,158,11,.04); }
+
+  .section-title {
+    display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;
+  }
+  .section-title h2 { font-size: 0.95rem; font-weight: 700; }
+  .section-title .hint { font-size: 0.75rem; color: var(--muted); }
+
+  /* ── MOBILE OVERLAY SIDEBAR ─────────────────────────────────────────────── */
+  .mobile-fab {
+    display: none;
+    position: fixed;
+    bottom: 20px; right: 20px;
+    z-index: 1500;
+    background: var(--accent);
+    color: #fff; border: none;
+    border-radius: 50px;
+    padding: 12px 18px;
+    font-size: 0.85rem; font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 4px 20px rgba(0,0,0,.4);
+    gap: 6px;
+    align-items: center;
+  }
+  .sidebar-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.6);
+    z-index: 1400;
+  }
+  .sidebar-overlay.show { display: block; }
+
+  /* ── PRINT ──────────────────────────────────────────────────────────────── */
+  @media print {
+    :root { --bg: #fff; --card: #fff; --text: #111; --muted: #555; --border: #ddd; }
+    header {
+      position: static !important;
+      background: #fff !important;
+      border-bottom: 2px solid #1e3a5f !important;
+      color: #000 !important;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .header-title { color: #1e3a5f !important; }
+    .header-title span { color: #3b82f6 !important; }
+    .header-credit { display: block !important; color: #555 !important; }
+    .header-credit strong { color: #3b82f6 !important; }
+    .header-actions, .mobile-fab { display: none !important; }
+    .layout { display: block; height: auto; overflow: visible; }
+    .sidebar { display: none !important; }
+    .main { overflow: visible; padding: 12px; }
+    .day-card, .chart-section, .hourly-section, .window-card {
+      background: white !important;
+      border-color: #ccc !important;
+      page-break-inside: avoid;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .badge-go { background: #d1fae5 !important; color: #065f46 !important; }
+    .badge-caution { background: #fef3c7 !important; color: #92400e !important; }
+    .badge-nogo { background: #fee2e2 !important; color: #991b1b !important; }
+    .wind-safe { color: #16a34a !important; }
+    .wind-caution { color: #d97706 !important; }
+    .wind-danger { color: #dc2626 !important; }
+    .row-danger { background: #fff5f5 !important; }
+    .row-caution { background: #fffbeb !important; }
+  }
+
+  /* ── RESPONSIVE ─────────────────────────────────────────────────────────── */
+  @media (max-width: 900px) {
+    .days-grid { grid-template-columns: repeat(4, 1fr); }
+  }
+  @media (max-width: 768px) {
+    :root { --header-h: 58px; }
+    header { padding: 8px 14px; gap: 10px; }
+    .header-title { font-size: 0.9rem; }
+    .header-sub { display: none; }
+    .header-logo { height: 36px; }
+    .layout { grid-template-columns: 1fr; height: auto; overflow: visible; }
+    .sidebar {
+      position: fixed;
+      top: var(--header-h); left: 0; bottom: 0;
+      width: 300px;
+      z-index: 1450;
+      transform: translateX(-100%);
+      box-shadow: 4px 0 20px rgba(0,0,0,.5);
+    }
+    .sidebar.open { transform: translateX(0); }
+    .main { height: auto; overflow: visible; padding: 12px; }
+    .mobile-fab { display: flex; }
+    .days-grid { grid-template-columns: repeat(4, 1fr); }
+    .windows-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+    .chart-wrap { height: 200px; }
+    .hourly-table { font-size: 0.75rem; }
+    .hourly-table th, .hourly-table td { padding: 5px 6px; }
+  }
+  @media (max-width: 480px) {
+    .days-grid { grid-template-columns: repeat(4, 1fr); }
+    .header-title { font-size: 0.82rem; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ── HEADER ───────────────────────────────────────────────────────────── -->
+<header>
+  <img class="header-logo"
+    src="https://www.dropbox.com/scl/fi/sw1yvqql17urkh2p9vuv3/MakMax-TME-same-size.jpg?rlkey=2vwuteln4w1xp54mb0u7ed1x5&raw=1"
+    alt="Taiyo / MakMax Logo"
+    onerror="this.style.display='none';document.querySelector('.header-logo-fallback').style.display='block'">
+  <span class="header-logo-fallback">⛅</span>
+  <div class="header-text">
+    <div class="header-title">Job Site Weather Planner <span>— Fabric Installation</span></div>
+    <div class="header-sub">7-day hourly forecast · Wind risk analysis · Best install windows</div>
+  </div>
+  <div class="header-credit">
+    Developed by<br><strong>Ahmad Dalain</strong>
+  </div>
+  <div class="header-actions">
+    <button class="btn secondary" style="width:auto;padding:7px 13px;font-size:.78rem" onclick="window.print()">🖨 Print</button>
+  </div>
+</header>
+
+<!-- ── LAYOUT ───────────────────────────────────────────────────────────── -->
+<div class="layout">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar" id="sidebar">
+
+    <!-- Landmark Search -->
+    <div>
+      <h3>Search Location</h3>
+      <div class="search-wrap">
+        <input type="search" id="searchInput" placeholder="Search landmark, city, address…"
+          oninput="onSearchInput()" onkeydown="onSearchKey(event)" autocomplete="off">
+        <div class="search-results" id="searchResults"></div>
+      </div>
+    </div>
+
+    <!-- Map -->
+    <div>
+      <h3>Map — Click to Pin</h3>
+      <div id="map"></div>
+      <div class="coords-display" style="margin-top:6px">
+        Lat: <span id="dispLat">—</span> &nbsp; Lon: <span id="dispLon">—</span>
+      </div>
+    </div>
+
+    <!-- Locate + Coords -->
+    <div class="input-group">
+      <div class="btn-row">
+        <button class="btn success" onclick="locateMe()" id="locateBtn">📍 Use My Location</button>
+      </div>
+      <hr class="divider">
+      <h3 style="margin-top:2px">Manual Coordinates</h3>
+      <div class="input-row">
+        <div style="flex:1">
+          <label>Latitude</label>
+          <input type="number" id="inLat" step="0.0001" placeholder="e.g. 25.2048">
+        </div>
+        <div style="flex:1">
+          <label>Longitude</label>
+          <input type="number" id="inLon" step="0.0001" placeholder="e.g. 55.2708">
+        </div>
+      </div>
+      <button class="btn secondary" onclick="applyManualCoords()">Apply Coordinates</button>
+    </div>
+
+    <!-- Thresholds -->
+    <div>
+      <h3>Wind Thresholds</h3>
+      <div class="input-group" style="gap:10px">
+        <div>
+          <label>Caution threshold</label>
+          <div class="threshold-row">
+            <input type="range" id="cautionSlider" min="5" max="60" value="25" oninput="updateThresholds()">
+            <div class="threshold-val" id="cautionVal">25 km/h</div>
+          </div>
+        </div>
+        <div>
+          <label>Stop-work / Danger threshold</label>
+          <div class="threshold-row">
+            <input type="range" id="dangerSlider" min="10" max="80" value="35" oninput="updateThresholds()">
+            <div class="threshold-val" id="dangerVal">35 km/h</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Legend -->
+    <div>
+      <h3>Risk Legend</h3>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:var(--safe)"></div>Safe — below caution threshold</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--caution)"></div>Caution — reduced work pace</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--danger)"></div>Stop Work — dangerous conditions</div>
+      </div>
+    </div>
+
+    <button class="btn" id="fetchBtn" onclick="fetchWeather()" disabled>⛅ Fetch 7-Day Forecast</button>
+
+    <div style="font-size:.72rem;color:var(--muted);line-height:1.5;padding-bottom:4px">
+      Search a landmark, drop a pin, or use GPS — then click Fetch.<br>
+      Data via <strong style="color:var(--text)">Open-Meteo</strong> (free, no API key).<br><br>
+      <span style="color:var(--muted)">Developed by <strong style="color:var(--accent)">Ahmad Dalain</strong></span>
+    </div>
+
+  </div><!-- /sidebar -->
+
+  <!-- MAIN -->
+  <div class="main" id="main">
+    <div class="empty-state" id="emptyState">
+      <div class="icon">📍</div>
+      <strong>Pin your job site</strong>
+      <p>Search a landmark, use GPS location, click the map, or enter coordinates — then tap "Fetch 7-Day Forecast".</p>
+    </div>
+    <div class="loading" id="loadingState">
+      <div class="spinner"></div>
+      <span>Fetching forecast…</span>
+    </div>
+    <div id="results" style="display:none;flex-direction:column;gap:16px"></div>
+  </div>
+
+</div><!-- /layout -->
+
+<!-- Mobile overlay + FAB -->
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+<button class="mobile-fab" id="mobileFab" onclick="toggleSidebar()">⚙️ Settings</button>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+let lat = null, lon = null;
+let marker = null;
+let weatherData = null;
+let selectedDay = 0;
+let windChart = null;
+let cautionKmh = 25, dangerKmh = 35;
+let searchTimer = null;
+
+// ── Mobile sidebar ─────────────────────────────────────────────────────────
+function toggleSidebar() {
+  const sb = document.getElementById('sidebar');
+  const ov = document.getElementById('sidebarOverlay');
+  const open = sb.classList.toggle('open');
+  ov.classList.toggle('show', open);
+  document.getElementById('mobileFab').textContent = open ? '✕ Close' : '⚙️ Settings';
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebarOverlay').classList.remove('show');
+  document.getElementById('mobileFab').textContent = '⚙️ Settings';
+}
+
+// ── Map ────────────────────────────────────────────────────────────────────
+const map = L.map('map', { zoomControl: true }).setView([25.2, 55.27], 5);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '© OpenStreetMap contributors', maxZoom: 19
+}).addTo(map);
+map.on('click', e => setLocation(e.latlng.lat, e.latlng.lng));
+
+function setLocation(la, lo, zoom) {
+  lat = +la.toFixed(5); lon = +lo.toFixed(5);
+  document.getElementById('dispLat').textContent = lat;
+  document.getElementById('dispLon').textContent = lon;
+  document.getElementById('inLat').value = lat;
+  document.getElementById('inLon').value = lon;
+  document.getElementById('fetchBtn').disabled = false;
+  if (marker) marker.setLatLng([lat, lon]);
+  else marker = L.marker([lat, lon]).addTo(map);
+  map.setView([lat, lon], zoom || Math.max(map.getZoom(), 11));
+}
+
+function applyManualCoords() {
+  const la = parseFloat(document.getElementById('inLat').value);
+  const lo = parseFloat(document.getElementById('inLon').value);
+  if (isNaN(la) || isNaN(lo) || la < -90 || la > 90 || lo < -180 || lo > 180) {
+    alert('Please enter valid latitude (-90 to 90) and longitude (-180 to 180).'); return;
+  }
+  setLocation(la, lo);
+}
+
+// ── GPS Locate ─────────────────────────────────────────────────────────────
+function locateMe() {
+  const btn = document.getElementById('locateBtn');
+  if (!navigator.geolocation) { alert('Geolocation is not supported by your browser.'); return; }
+  btn.textContent = '⏳ Locating…';
+  btn.disabled = true;
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      setLocation(pos.coords.latitude, pos.coords.longitude, 13);
+      btn.textContent = '📍 Use My Location';
+      btn.disabled = false;
+    },
+    err => {
+      alert('Could not get your location: ' + err.message);
+      btn.textContent = '📍 Use My Location';
+      btn.disabled = false;
+    },
+    { timeout: 10000 }
+  );
+}
+
+// ── Landmark Search (Nominatim) ────────────────────────────────────────────
+let lastQuery = '';
+function onSearchInput() {
+  clearTimeout(searchTimer);
+  const q = document.getElementById('searchInput').value.trim();
+  if (q.length < 3) { hideSearchResults(); return; }
+  if (q === lastQuery) return;
+  searchTimer = setTimeout(() => doSearch(q), 400);
+}
+
+function onSearchKey(e) {
+  if (e.key === 'Enter') {
+    clearTimeout(searchTimer);
+    const q = document.getElementById('searchInput').value.trim();
+    if (q.length >= 3) doSearch(q);
+  }
+  if (e.key === 'Escape') hideSearchResults();
+}
+
+async function doSearch(q) {
+  lastQuery = q;
+  const box = document.getElementById('searchResults');
+  box.className = 'search-results show';
+  box.innerHTML = '<div class="searching-indicator">🔍 Searching…</div>';
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=6&addressdetails=1`;
+    const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
+    const data = await res.json();
+    if (data.length === 0) {
+      box.innerHTML = '<div class="searching-indicator">No results found</div>';
+    } else {
+      box.innerHTML = '';
+      data.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'search-result-item';
+        const parts = item.display_name.split(', ');
+        const name = parts.slice(0, 2).join(', ');
+        const detail = parts.slice(2).join(', ');
+        div.innerHTML = `<div class="sri-name">${name}</div><div class="sri-detail">${detail}</div>`;
+        div.onclick = () => {
+          setLocation(parseFloat(item.lat), parseFloat(item.lon), 13);
+          document.getElementById('searchInput').value = name;
+          hideSearchResults();
+          closeSidebar();
+        };
+        box.appendChild(div);
+      });
+    }
+  } catch {
+    box.innerHTML = '<div class="searching-indicator">Search failed — check connection</div>';
+  }
+}
+
+function hideSearchResults() {
+  document.getElementById('searchResults').className = 'search-results';
+}
+document.addEventListener('click', e => {
+  if (!e.target.closest('.search-wrap')) hideSearchResults();
+});
+
+// ── Thresholds ─────────────────────────────────────────────────────────────
+function updateThresholds() {
+  cautionKmh = +document.getElementById('cautionSlider').value;
+  dangerKmh  = +document.getElementById('dangerSlider').value;
+  if (cautionKmh >= dangerKmh) {
+    dangerKmh = cautionKmh + 5;
+    document.getElementById('dangerSlider').value = dangerKmh;
+  }
+  document.getElementById('cautionVal').textContent = cautionKmh + ' km/h';
+  document.getElementById('dangerVal').textContent  = dangerKmh  + ' km/h';
+  if (weatherData) renderAll();
+}
+
+// ── Fetch ──────────────────────────────────────────────────────────────────
+async function fetchWeather() {
+  if (lat === null) return;
+  closeSidebar();
+  showLoading(true);
+  try {
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}`
+      + `&hourly=temperature_2m,relativehumidity_2m,precipitation_probability,precipitation`
+      + `,windspeed_10m,windgusts_10m,winddirection_10m,weathercode`
+      + `&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_probability_max`
+      + `&wind_speed_unit=kmh&timezone=auto&forecast_days=7`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('API error ' + res.status);
+    weatherData = await res.json();
+    selectedDay = 0;
+    renderAll();
+  } catch(e) {
+    alert('Failed to fetch weather: ' + e.message);
+    showLoading(false);
+  }
+}
+
+function showLoading(on) {
+  document.getElementById('emptyState').style.display = 'none';
+  document.getElementById('loadingState').style.display = on ? 'flex' : 'none';
+  document.getElementById('results').style.display = on ? 'none' : 'flex';
+}
+
+// ── WMO helpers ────────────────────────────────────────────────────────────
+function wmoIcon(code) {
+  if (code === 0) return '☀️';
+  if (code <= 2) return '⛅';
+  if (code <= 3) return '☁️';
+  if (code <= 49) return '🌫️';
+  if (code <= 59) return '🌦️';
+  if (code <= 69) return '🌧️';
+  if (code <= 79) return '❄️';
+  if (code <= 82) return '🌧️';
+  if (code <= 86) return '🌨️';
+  if (code <= 99) return '⛈️';
+  return '🌤️';
+}
+function wmoLabel(code) {
+  if (code === 0) return 'Clear sky';
+  if (code <= 2) return 'Partly cloudy';
+  if (code <= 3) return 'Overcast';
+  if (code <= 49) return 'Foggy';
+  if (code <= 59) return 'Drizzle';
+  if (code <= 69) return 'Rain';
+  if (code <= 79) return 'Snow';
+  if (code <= 82) return 'Rain showers';
+  if (code <= 86) return 'Snow showers';
+  if (code <= 99) return 'Thunderstorm';
+  return 'Unknown';
+}
+
+// ── Risk helpers ───────────────────────────────────────────────────────────
+function riskLevel(wind) {
+  if (wind >= dangerKmh) return 'danger';
+  if (wind >= cautionKmh) return 'caution';
+  return 'safe';
+}
+function dayStatus(maxWind) {
+  if (maxWind >= dangerKmh) return { label:'NO-GO', cls:'badge-nogo' };
+  if (maxWind >= cautionKmh) return { label:'CAUTION', cls:'badge-caution' };
+  return { label:'GO', cls:'badge-go' };
+}
+
+// ── Wind direction helpers ─────────────────────────────────────────────────
+function degToCompass(deg) {
+  const dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+  return dirs[Math.round((deg || 0) / 22.5) % 16];
+}
+function windArrow(deg) {
+  // Rotates ↑ so it points in the direction the wind is blowing TO
+  const rot = ((deg || 0) + 180) % 360;
+  return `<span style="display:inline-block;transform:rotate(${rot}deg);line-height:1;font-style:normal">↑</span>`;
+}
+function gustRiskLevel(gust) {
+  if (gust >= dangerKmh) return 'danger';
+  if (gust >= cautionKmh) return 'caution';
+  return 'safe';
+}
+
+// ── Date helpers ───────────────────────────────────────────────────────────
+function fmtDate(iso) {
+  return new Date(iso + 'T00:00:00').toLocaleDateString(undefined, { weekday:'short', month:'short', day:'numeric' });
+}
+function fmtDayName(iso) {
+  return new Date(iso + 'T00:00:00').toLocaleDateString(undefined, { weekday:'long' });
+}
+function fmtHour(isoHour) {
+  return new Date(isoHour).toLocaleTimeString(undefined, { hour:'2-digit', minute:'2-digit', hour12:false });
+}
+function dayOf(isoHour) { return isoHour.substring(0, 10); }
+
+function fmtHourShort(iso) {
+  const d = new Date(iso);
+  if (d.getHours() === 0) return d.toLocaleDateString(undefined,{weekday:'short'});
+  if (d.getHours() % 6 === 0) return d.toLocaleTimeString(undefined,{hour:'2-digit',hour12:false});
+  return '';
+}
+
+// ── Main render ────────────────────────────────────────────────────────────
+function renderAll() {
+  showLoading(false);
+  const r = document.getElementById('results');
+  r.innerHTML = '';
+
+  const h = weatherData.hourly;
+  const d = weatherData.daily;
+  const days = d.time;
+
+  // group hourly by day
+  const byDay = {};
+  days.forEach(day => byDay[day] = []);
+  h.time.forEach((t, i) => {
+    const day = dayOf(t);
+    if (byDay[day]) byDay[day].push({
+      time: t, wind: h.windspeed_10m[i], gust: h.windgusts_10m[i],
+      temp: h.temperature_2m[i], hum: h.relativehumidity_2m[i],
+      precip: h.precipitation_probability[i], code: h.weathercode[i], dir: h.winddirection_10m[i]
+    });
+  });
+
+  // ── Best Windows ──────────────────────────────────────────────────────
+  const windows = findBestWindows(h, days);
+  const wSection = document.createElement('div');
+  wSection.innerHTML = `
+    <div class="section-title">
+      <h2>Best Installation Windows</h2>
+      <span class="hint">Consecutive safe hours below ${cautionKmh} km/h</span>
+    </div>
+    <div class="windows-grid" id="windowsGrid"></div>`;
+  r.appendChild(wSection);
+  const wg = wSection.querySelector('#windowsGrid');
+  if (windows.length === 0) {
+    wg.innerHTML = '<p style="color:var(--muted);font-size:.85rem">No safe consecutive windows found this week.</p>';
+  } else {
+    windows.slice(0,8).forEach(w => {
+      const c = document.createElement('div');
+      c.className = 'window-card';
+      c.innerHTML = `
+        <div class="wc-date">${fmtDate(w.date)}</div>
+        <div class="wc-time">${w.start} – ${w.end}</div>
+        <div class="wc-wind">↑ Max ${w.maxWind.toFixed(1)} km/h · ${w.hours}h window</div>`;
+      wg.appendChild(c);
+    });
+  }
+
+  // ── Day Cards ─────────────────────────────────────────────────────────
+  const daySection = document.createElement('div');
+  daySection.innerHTML = `
+    <div class="section-title">
+      <h2>7-Day Overview</h2>
+      <span class="hint">Tap a day for hourly detail</span>
+    </div>
+    <div class="days-grid" id="daysGrid"></div>`;
+  r.appendChild(daySection);
+  const dg = daySection.querySelector('#daysGrid');
+
+  days.forEach((day, i) => {
+    const hrs = byDay[day] || [];
+    const winds = hrs.map(x => x.wind);
+    const maxWind = winds.length ? Math.max(...winds) : 0;
+    const avgPrec = hrs.length ? hrs.reduce((a,b) => a + b.precip, 0) / hrs.length : 0;
+    const status = dayStatus(maxWind);
+    const maxGusts = hrs.map(x => x.gust);
+    const maxGust = maxGusts.length ? Math.max(...maxGusts) : 0;
+    const gustWarningDay = maxGust >= dangerKmh ? `<div class="dc-wind-max wind-danger">⚠️ Gust ${maxGust.toFixed(0)} km/h</div>` : '';
+    const peakHr = hrs[winds.indexOf(maxWind)];
+    const domDir = peakHr ? degToCompass(peakHr.dir) : '—';
+    const domArrow = peakHr ? windArrow(peakHr.dir) : '';
+    const c = document.createElement('div');
+    c.className = 'day-card' + (i === selectedDay ? ' selected' : '');
+    c.innerHTML = `
+      <div class="dc-name">${new Date(day+'T00:00:00').toLocaleDateString(undefined,{weekday:'short'})}</div>
+      <div class="dc-date">${new Date(day+'T00:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric'})}</div>
+      <div class="dc-icon">${wmoIcon(d.weathercode[i])}</div>
+      <div class="dc-badge ${status.cls}">${status.label}</div>
+      <div class="dc-wind-max">💨 ${maxWind.toFixed(0)} km/h</div>
+      <div class="dc-wind-max">${domArrow} ${domDir}</div>
+      ${gustWarningDay}
+      <div class="dc-wind-max">🌡️ ${d.temperature_2m_max[i]}°/${d.temperature_2m_min[i]}°</div>
+      <div class="dc-precip">🌧️ ${Math.round(avgPrec)}%</div>`;
+    c.onclick = () => { selectedDay = i; renderAll(); };
+    dg.appendChild(c);
+  });
+
+  // ── Wind Chart ────────────────────────────────────────────────────────
+  const chartSection = document.createElement('div');
+  chartSection.className = 'chart-section';
+  chartSection.innerHTML = `
+    <h2>7-Day Wind Speed (km/h) — ${fmtDayName(days[selectedDay])} highlighted</h2>
+    <div class="chart-wrap"><canvas id="windChart"></canvas></div>`;
+  r.appendChild(chartSection);
+
+  const allWinds = h.windspeed_10m;
+  const allGusts = h.windgusts_10m;
+
+  if (windChart) windChart.destroy();
+  const ctx = document.getElementById('windChart').getContext('2d');
+
+  windChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: h.time.map(fmtHourShort),
+      datasets: [
+        {
+          label: 'Wind Speed (km/h)',
+          data: allWinds,
+          borderWidth: 2, pointRadius: 0, tension: 0.3,
+          backgroundColor: 'transparent',
+          segment: {
+            borderColor: ctx2 => {
+              const w = allWinds[ctx2.p1DataIndex];
+              return w >= dangerKmh ? '#ef4444' : w >= cautionKmh ? '#f59e0b' : '#22c55e';
+            }
+          }
+        },
+        {
+          label: 'Gusts (km/h)',
+          data: allGusts,
+          backgroundColor: 'transparent',
+          borderWidth: 1.5, borderDash: [4,3], pointRadius: 0, tension: 0.3,
+          segment: {
+            borderColor: ctx2 => {
+              const g = allGusts[ctx2.p1DataIndex];
+              return g >= dangerKmh ? 'rgba(239,68,68,.7)' : g >= cautionKmh ? 'rgba(245,158,11,.6)' : 'rgba(148,163,184,.35)';
+            }
+          }
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: '#94a3b8', font: { size: 11 } } },
+        tooltip: { callbacks: { label: c2 => `${c2.dataset.label}: ${c2.parsed.y.toFixed(1)} km/h` } }
+      },
+      scales: {
+        x: { ticks: { color:'#64748b', maxTicksLimit:14, font:{size:9} }, grid: { color:'rgba(51,65,85,.4)' } },
+        y: { ticks: { color:'#64748b', font:{size:10} }, grid: { color:'rgba(51,65,85,.4)' }, min: 0 }
+      }
+    },
+    plugins: [{
+      id: 'thresholdLines',
+      afterDraw(chart) {
+        const { ctx: c, chartArea: { left, right, top, height }, scales: { y, x } } = chart;
+        // threshold lines
+        [[cautionKmh,'#f59e0b','Caution'],[dangerKmh,'#ef4444','Stop Work']].forEach(([val,color,lbl]) => {
+          const yPos = y.getPixelForValue(val);
+          c.save(); c.beginPath(); c.setLineDash([5,4]);
+          c.strokeStyle = color; c.lineWidth = 1.5;
+          c.moveTo(left, yPos); c.lineTo(right, yPos); c.stroke();
+          c.fillStyle = color; c.font = '9px system-ui';
+          c.fillText(lbl + ' ' + val + ' km/h', left + 6, yPos - 3);
+          c.restore();
+        });
+        // selected day highlight band
+        const dayHrs = byDay[days[selectedDay]];
+        if (dayHrs && dayHrs.length) {
+          const firstIdx = h.time.indexOf(dayHrs[0].time);
+          const lastIdx  = h.time.indexOf(dayHrs[dayHrs.length-1].time);
+          if (firstIdx >= 0 && lastIdx >= 0) {
+            const x1 = x.getPixelForValue(firstIdx);
+            const x2 = x.getPixelForValue(lastIdx);
+            c.save(); c.fillStyle = 'rgba(59,130,246,.09)';
+            c.fillRect(x1, top, x2 - x1, height); c.restore();
+          }
+        }
+      }
+    }]
+  });
+
+  // ── Hourly Detail Table ───────────────────────────────────────────────
+  const selDayHrs = byDay[days[selectedDay]] || [];
+  const hourlySection = document.createElement('div');
+  hourlySection.className = 'hourly-section';
+  hourlySection.innerHTML = `
+    <h2>Hourly Detail — ${fmtDate(days[selectedDay])}</h2>
+    <div style="overflow-x:auto">
+      <table class="hourly-table">
+        <thead>
+          <tr>
+            <th>Time</th><th>Wind</th><th>Direction</th><th>Gusts</th><th>Gust Risk</th><th>Wind Risk</th>
+            <th>Temp</th><th>Humidity</th><th>Precip%</th><th>Condition</th>
+          </tr>
+        </thead>
+        <tbody id="hourlyBody"></tbody>
+      </table>
+    </div>`;
+  r.appendChild(hourlySection);
+  const tbody = hourlySection.querySelector('#hourlyBody');
+  selDayHrs.forEach(hr => {
+    const rl = riskLevel(hr.wind);
+    const gl = gustRiskLevel(hr.gust);
+    const rowRisk = (rl === 'danger' || gl === 'danger') ? 'danger' : (rl === 'caution' || gl === 'caution') ? 'caution' : 'safe';
+    const tr = document.createElement('tr');
+    if (rowRisk === 'danger') tr.className = 'row-danger';
+    else if (rowRisk === 'caution') tr.className = 'row-caution';
+    const windRiskLabel = rl === 'danger' ? '🔴 Stop Work' : rl === 'caution' ? '🟡 Caution' : '🟢 Safe';
+    const gustRiskLabel = gl === 'danger' ? '⚠️ Stop Work' : gl === 'caution' ? '▲ Caution' : '—';
+    const gustCls = gl !== 'safe' ? `wind-${gl}` : '';
+    tr.innerHTML = `
+      <td>${fmtHour(hr.time)}</td>
+      <td class="wind-${rl}">${hr.wind.toFixed(1)} km/h</td>
+      <td style="letter-spacing:.02em">${windArrow(hr.dir)} ${degToCompass(hr.dir)}</td>
+      <td class="${gustCls}">${hr.gust.toFixed(1)} km/h</td>
+      <td class="${gustCls}" style="white-space:nowrap">${gustRiskLabel}</td>
+      <td>${windRiskLabel}</td>
+      <td>${hr.temp.toFixed(1)}°C</td>
+      <td>${hr.hum}%</td>
+      <td>${hr.precip}%</td>
+      <td>${wmoIcon(hr.code)} ${wmoLabel(hr.code)}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+// ── Best Windows ───────────────────────────────────────────────────────────
+function findBestWindows(h, days) {
+  const results = [];
+  days.forEach(day => {
+    const indices = [];
+    h.time.forEach((t, i) => { if (dayOf(t) === day) indices.push(i); });
+    let run = [];
+    indices.forEach(i => {
+      if (h.windspeed_10m[i] < cautionKmh) { run.push(i); }
+      else { if (run.length >= 2) pushWindow(results, h, day, run); run = []; }
+    });
+    if (run.length >= 2) pushWindow(results, h, day, run);
+  });
+  return results.sort((a, b) => b.hours - a.hours || a.maxWind - b.maxWind);
+}
+function pushWindow(results, h, day, run) {
+  const winds = run.map(i => h.windspeed_10m[i]);
+  results.push({
+    date: day,
+    start: fmtHour(h.time[run[0]]),
+    end: fmtHour(h.time[run[run.length-1]]),
+    hours: run.length,
+    maxWind: Math.max(...winds)
+  });
+}
+
+// ── Auto-locate on load ────────────────────────────────────────────────────
+if (navigator.geolocation) {
+  navigator.geolocation.getCurrentPosition(
+    pos => setLocation(pos.coords.latitude, pos.coords.longitude, 12),
+    () => {}
+  );
+}
+</script>
+</body>
+</html>
